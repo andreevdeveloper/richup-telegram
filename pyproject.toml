@@ -1,0 +1,55 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "richup-telegram"
+version = "0.1.0"
+description = "Rich Messages Demo for aiogram 3.29 and Telegram Bot API 10.1"
+readme = "README.md"
+requires-python = ">=3.12,<3.15"
+dependencies = [
+    "aiogram==3.29.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.15",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "pytest-cov>=6.0",
+    "ruff>=0.11",
+]
+
+[project.scripts]
+richup-bot = "richup_bot.__main__:run"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/richup_bot"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-config --strict-markers"
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["richup_bot"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["richup_bot"]
+
