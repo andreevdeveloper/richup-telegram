@@ -1,12 +1,17 @@
-# Задание агенту: перенести новые возможности Telegram в существующего бота
+# Telegram Rich Messages в Bot API 10.1 и 10.2
 
-> Этот файл — самостоятельное техническое задание для coding agent. Передай его агенту вместе с репозиторием старого бота. Если рядом доступен демонстрационный репозиторий `richup-telegram`, используй его как рабочий reference, но не копируй его целиком.
+Технический справочник по новым возможностям сообщений Telegram и их реализации в `aiogram`. Документ описывает Rich HTML, Rich Markdown, потоковые черновики, редактирование rich-контента, входящий typed AST, rich inline results, ссылки в вариантах опроса и join-request queries. В примерах учтены различия между Bot API 10.1/10.2 и `aiogram` 3.29.1/3.30.0.
 
-## Роль и цель
+Reference-реализация находится в проекте `richup-telegram`. Её основные модули:
 
-Ты — senior Python/Telegram engineer. Твоя задача — изучить существующего бота, безопасно обновить его Telegram-стек и встроить возможности Rich Messages, появившиеся в Telegram Bot API 10.1. Не превращай production-бота в копию демо: сохрани его архитектуру, команды, бизнес-логику, хранилище, middleware, webhook/polling и способ деплоя.
-
-Работай автономно: сначала исследуй репозиторий, затем реализуй перенос, обнови тесты и документацию и выполни доступные проверки. Не ограничивайся планом или примерами кода — внеси законченные изменения. Не трогай несвязанные части проекта и не переписывай пользовательские изменения.
+| Область | Файл reference-проекта |
+|---|---|
+| Rich HTML/Markdown builders | `src/richup_bot/content.py` |
+| Отправка, streaming, edit, poll, AST | `src/richup_bot/routers/rich.py` |
+| Inline result | `src/richup_bot/routers/inline.py` |
+| Join-request queries | `src/richup_bot/routers/join_requests.py` |
+| Streaming lifecycle | `src/richup_bot/services/streaming.py` |
+| Protocol tests | `tests/test_protocol_models.py`, `tests/test_streaming.py` |
 
 ## Версии и границы совместимости
 
@@ -17,24 +22,26 @@
 - `aiogram 3.29.0` использовать нельзя: релиз отозван из PyPI из-за резкого замедления при разборе вложенных `RichBlock`.
 - Telegram Bot API 10.2 и `aiogram==3.30.0` уже выпущены. В 10.2 у `InputRichMessage` появились исходящие `blocks` и `media`, а также семейство `InputRichBlock*`.
 
-Сначала выбери и зафиксируй одну стратегию:
+### Варианты совместимости
 
-1. **Рекомендуемая для актуализируемого aiogram 3.x-проекта:** `aiogram==3.30.0`. Реализуй возможности 10.1 через стабильные `html`/`markdown`; применяй новые `blocks`/`media` 10.2 только там, где это действительно нужно продукту.
-2. **Точное воспроизведение reference-проекта:** `aiogram==3.29.1`. У исходящего `InputRichMessage` используй ровно одно из полей `html` или `markdown`; не используй `InputRichBlock*` и поле `blocks` для исходящего сообщения.
-3. Если проект на aiogram 2.x, сначала оцени полный переход на aiogram 3.x как отдельную major migration: Executor заменён на `Dispatcher.start_polling`, фильтры и middleware имеют другой интерфейс, параметры бота больше нельзя передавать через старые глобальные подходы. Не делай механическую замену импортов.
-4. Если проект не использует aiogram, не внедряй aiogram только ради этой задачи. Используй типы/методы его текущего фреймворка, если тот поддерживает Bot API 10.1+, либо минимальный строго изолированный вызов Bot API. Объясни выбранный путь.
+| Сценарий | Версия | Доступный исходящий формат |
+|---|---|---|
+| Точное воспроизведение reference-проекта | `aiogram==3.29.1`, Bot API 10.1 | ровно одно из `html` или `markdown` |
+| Актуальная ветка aiogram | `aiogram==3.30.0`, Bot API 10.2 | ровно одно из `html`, `markdown` или `blocks`; дополнительно доступно `media` |
+| Старый проект на aiogram 2.x | требуется major migration на 3.x | Executor заменён на `Dispatcher.start_polling`; отличаются filters, middleware и lifecycle |
+| Другой Telegram framework | зависит от поддержки Bot API 10.1+ | используются эквивалентные типы/методы фреймворка или изолированные raw Bot API calls |
 
-Не используй диапазон зависимости вроде `aiogram>=3.29`: он может молча изменить протокол моделей. Закрепи проверенную точную версию и обнови lock-файл штатным менеджером пакетов проекта.
+Точная фиксация версии безопаснее диапазона вроде `aiogram>=3.29`, поскольку между 3.29 и 3.30 изменился протокол исходящих моделей Rich Messages. Dependency manifest, lock-файл и runtime image должны указывать совместимые версии.
 
 ## Источники истины
 
-При расхождении данных используй такой приоритет:
+При расхождении данных действует следующий приоритет:
 
 1. официальная текущая спецификация Telegram Bot API;
 2. документация выбранной закреплённой версии aiogram;
 3. сериализация реально установленных моделей и методов;
 4. reference-реализация;
-5. этот документ.
+5. этот справочник.
 
 Официальные ссылки:
 
@@ -45,24 +52,17 @@
 - актуальная документация aiogram 3.30.0: <https://docs.aiogram.dev/en/latest/>
 - история релизов aiogram: <https://pypi.org/project/aiogram/>
 
-Если у тебя есть доступ в интернет, перед изменением зависимостей проверь эти страницы. Не заменяй официальные сведения статьями и случайными примерами.
+Актуальные сведения о версиях следует проверять по официальным страницам. Сторонние статьи не являются источником сигнатур или ограничений API.
 
-## Сначала исследуй старый проект
+## Особенности интеграции в существующий проект
 
-До редактирования найди и кратко зафиксируй:
+На перенос влияют версия Python и Pydantic, Telegram framework, dependency lock, lifecycle `Bot`/`Dispatcher`, router order, webhook/polling, default `parse_mode`, собственные send/edit wrappers, middleware и обработка Telegram API errors.
 
-- версию Python, Telegram-фреймворк и его версию, Pydantic, менеджер зависимостей и lock-файл;
-- точки создания `Bot`/`Dispatcher`, подключения router/handler, startup/shutdown, webhook или polling;
-- существующие default `parse_mode`, обёртки отправки/редактирования, retry/rate-limit middleware и обработку Telegram API errors;
-- команды, callback protocol, FSM, локализацию и места генерации сообщений;
-- catch-all handlers: новый `F.rich_message` не должен быть перехвачен раньше общим handler;
-- способ регистрации `allowed_updates`; `chat_join_request` и `inline_query` должны реально доходить до приложения;
-- тестовый стек, Docker/CI и ограничения минимальной версии Python;
-- используется ли self-hosted Telegram Bot API server и поддерживает ли он требуемую версию.
+Специализированный `F.rich_message` handler располагается раньше catch-all handlers. Для `chat_join_request` и `inline_query` соответствующие update types должны присутствовать в `allowed_updates`. Self-hosted Telegram Bot API server также должен поддерживать нужную версию протокола.
 
-После исследования составь короткую карту «существующий компонент → место интеграции». Адаптируй имена модулей к проекту. Не создавай параллельную архитектуру, если в проекте уже есть подходящие service/router/content слои.
+Rich content удобно отделять от Telegram I/O в чистые builder-функции. Streaming относится к service layer, а не к отдельным циклам внутри handlers. При переносе в старый проект обычно сохраняются его существующие router, config, localization, storage, FSM, middleware и deployment boundaries.
 
-## Что требуется перенести
+## Возможности API и примеры
 
 ### 1. Отправка Rich HTML и Rich Markdown
 
@@ -88,16 +88,16 @@ rich_message = InputRichMessage(
 )
 ```
 
-Rich Markdown близок к GitHub Flavored Markdown и **не является MarkdownV2**. Не пропускай Rich HTML через старый `parse_mode`, а Rich Markdown — через существующий MarkdownV2 escaper.
+Rich Markdown близок к GitHub Flavored Markdown и **не является MarkdownV2**. Rich HTML не использует старый `parse_mode`, а Rich Markdown не должен обрабатываться существующим MarkdownV2 escaper.
 
-В один `InputRichMessage` передавай ровно один формат:
+В одном `InputRichMessage` указывается ровно один формат:
 
 - в aiogram 3.29.1: `html` **или** `markdown`;
 - в aiogram 3.30.0: `html`, `markdown` **или** `blocks`.
 
-Вынеси построение сложного контента в чистые builder-функции. Любые динамические значения пользователя в HTML пропускай через `html.escape`, включая имя, title, введённый текст и подписи. URL валидируй отдельно по допустимой схеме.
+Сложный контент обычно строится в чистых builder-функциях. Любые динамические значения пользователя в HTML проходят через `html.escape`, включая имя, title, введённый текст и подписи. URL отдельно валидируются по допустимой схеме.
 
-Минимальный набор, который следует продемонстрировать в подходящей существующей команде или экране: заголовок, параграф, inline formatting, список, таблица, `details`, цитата, ссылка и формула. Не добавляй отдельное демо-меню, если продуктовый интерфейс позволяет показать эти возможности естественно.
+Типичный showcase содержит заголовок, параграф, inline formatting, список, таблицу, `details`, цитату, ссылку и формулу. В product-интерфейсе эти элементы могут использоваться независимо без отдельного демо-меню.
 
 Основные ограничения rich-документа:
 
@@ -113,7 +113,7 @@ Rich Markdown близок к GitHub Flavored Markdown и **не являетс�
 
 #### Полный справочник Rich HTML
 
-Не путай этот синтаксис с HTML для обычного `sendMessage`: он передаётся только в `InputRichMessage(html=...)`. Telegram принимает только документированные теги.
+Этот синтаксис отличается от HTML для обычного `sendMessage` и передаётся только в `InputRichMessage(html=...)`. Telegram принимает только документированные теги.
 
 Inline-форматирование:
 
@@ -525,7 +525,7 @@ rich_table = InputRichMessage(
 
 У `RichBlockTableCell` обязательны `align` (`left`, `center`, `right`) и `valign` (`top`, `middle`, `bottom`); доступны `text`, `is_header`, `colspan` и `rowspan`. Даже если HTML-представление проще, serialization test для explicit table обязателен.
 
-Полный набор исходящих block types 10.2, который агент должен знать и сопоставлять с HTML-вариантом:
+Полный набор исходящих block types 10.2 и их HTML-эквиваленты:
 
 | `InputRichBlock*` | Эквивалент/назначение |
 |---|---|
@@ -551,11 +551,11 @@ rich_table = InputRichMessage(
 | `VoiceNote` | voice-note block |
 | `Thinking` | `<tg-thinking>`, только draft |
 
-Для inline-форматирования внутри explicit blocks используются `RichText*` response/input-compatible модели: bold, italic, underline, strikethrough, spoiler, date-time, text mention, subscript, superscript, marked, code, custom emoji, mathematical expression, URL, email, phone, bank card, mention, hashtag, cashtag, bot command, anchor/link и reference/link. Перед применением конкретного конструктора сверь его сигнатуру с документацией закреплённой версии и добавь serialization test: это та часть API, которая различается между 3.29.1 и 3.30.0 сильнее всего.
+Для inline-форматирования внутри explicit blocks используются `RichText*` response/input-compatible модели: bold, italic, underline, strikethrough, spoiler, date-time, text mention, subscript, superscript, marked, code, custom emoji, mathematical expression, URL, email, phone, bank card, mention, hashtag, cashtag, bot command, anchor/link и reference/link. Сигнатура конкретного конструктора зависит от закреплённой версии и проверяется по её документации и serialization test; именно эта часть API заметнее всего различается между 3.29.1 и 3.30.0.
 
 ### 2. Потоковый rich draft
 
-Вынеси streaming в сервис, не размазывай цикл по handler. Инварианты:
+Streaming обычно оформляется отдельным сервисом. Его инварианты:
 
 - `send_rich_message_draft` работает только с числовым `chat_id` обычного private chat;
 - `draft_id` должен быть ненулевым;
@@ -563,7 +563,7 @@ rich_table = InputRichMessage(
 - draft — временный preview примерно на 30 секунд;
 - после кадров **обязательно** вызови `send_rich_message` с полным результатом;
 - `<tg-thinking>` допустим только в draft и не должен попадать в постоянный результат;
-- прямую загрузку новых файлов в draft не используй;
+- прямая загрузка новых файлов в draft не поддерживается;
 - отмена задачи, timeout и Telegram API error должны корректно завершать пользовательский flow и логироваться без утечки секретов.
 
 Эталонный сервис:
@@ -609,7 +609,7 @@ async def stream_rich_message(
     )
 ```
 
-В handler сначала проверяй `message.chat.type == ChatType.PRIVATE` через сравнение значений, которое также корректно работает, когда тип после десериализации представлен строкой. Не требуй topics: они не нужны для обычного личного диалога.
+Handler проверяет `message.chat.type == ChatType.PRIVATE` через сравнение значений, которое также корректно работает, когда тип после десериализации представлен строкой. Topics для обычного личного диалога не требуются.
 
 ### 3. Редактирование rich-сообщения
 
@@ -624,11 +624,11 @@ await bot.edit_message_text(
 )
 ```
 
-Не передавай одновременно `text` и `rich_message`. Проверь, что при переключении состояния сохраняется тот же `message_id`. При редактировании inline message нельзя напрямую загрузить новый файл.
+`text` и `rich_message` не передаются одновременно. При переключении состояния сохраняется тот же `message_id`. При редактировании inline message нельзя напрямую загрузить новый файл.
 
 ### 4. Входящий typed AST
 
-Добавь обработку поля `Message.rich_message` в подходящий router. Располагай специализированный handler раньше catch-all handler:
+Поле `Message.rich_message` обрабатывается специализированным handler, расположенным раньше catch-all handler:
 
 ```python
 import json
@@ -643,14 +643,14 @@ async def handle_rich_message(message: Message) -> None:
     if message.rich_message is None:
         return
     payload = message.rich_message.model_dump(mode="json", exclude_none=True)
-    # Используй payload в бизнес-логике. Не отправляй большой JSON пользователю в production.
+    # payload доступен для бизнес-логики; большой JSON не предназначен для production-ответа.
 ```
 
-`RichMessage.blocks` — типизированное дерево ответа Telegram. Не переиспользуй response-модели `RichBlock*` для формирования исходящего payload в aiogram 3.29.1. Если нужен debug preview, ограничь его безопасной длиной меньше лимита обычного сообщения и не включай чувствительные данные.
+`RichMessage.blocks` — типизированное дерево ответа Telegram. Response-модели `RichBlock*` не используются для формирования исходящего payload в aiogram 3.29.1. Debug preview ограничивается безопасной длиной меньше лимита обычного сообщения и не содержит чувствительные данные.
 
 ### 5. Rich content в inline query
 
-Если inline mode уже используется или нужен продукту, верни `InputRichMessageContent`:
+Rich content возвращается из inline query через `InputRichMessageContent`:
 
 ```python
 from aiogram.types import InlineQueryResultArticle, InputRichMessage, InputRichMessageContent
@@ -665,7 +665,7 @@ result = InlineQueryResultArticle(
 await query.answer([result], cache_time=1, is_personal=True)
 ```
 
-Inline mode предварительно включается через `/setinline` у `@BotFather`. Выбирай стабильный уникальный `id`, разумный cache policy и не возвращай персональные данные в неперсональном кэше.
+Inline mode предварительно включается через `/setinline` у `@BotFather`. Result использует стабильный уникальный `id` и подходящий cache policy; персональные данные не помещаются в неперсональный кэш.
 
 ### 6. Ссылка внутри варианта опроса
 
@@ -679,7 +679,7 @@ option = InputPollOption(
 )
 ```
 
-URL должен быть HTTP/HTTPS. Сохрани все существующие правила опроса и права чата. Если функция не нужна продукту, добавь изолированный пример/тест только когда пользователь действительно просил перенести весь showcase; не засоряй основной UX.
+URL должен быть HTTP/HTTPS. Все обычные правила опроса и права чата продолжают действовать. Функция может использоваться независимо от остальных возможностей Rich Messages.
 
 ### 7. Join-request queries
 
@@ -689,7 +689,7 @@ URL должен быть HTTP/HTTPS. Сохрани все существующ
 @router.chat_join_request()
 async def handle_join_request(request: ChatJoinRequest, settings: Settings) -> None:
     if request.query_id is None:
-        # Это обычный join request; не меняй прежнюю политику обработки.
+        # Это обычный join request; прежняя политика обработки сохраняется.
         return
 
     if settings.join_request_mode == "webapp":
@@ -699,13 +699,13 @@ async def handle_join_request(request: ChatJoinRequest, settings: Settings) -> N
     await request.answer_query(result=settings.join_request_mode)
 ```
 
-Допустимые результаты: `approve`, `decline`, `queue`. Безопасное значение по умолчанию — `queue`, чтобы решение осталось администраторам. Web App URL обязан использовать HTTPS. `send_webapp()` не завершает решение: backend должен проверить подписанные Telegram Web App init data и затем вызвать `answerChatJoinRequestQuery`. Не имитируй успешную проверку init data и не включай auto-approve без явного требования владельца проекта.
+Допустимые результаты: `approve`, `decline`, `queue`. Безопасное значение по умолчанию — `queue`, при котором решение остаётся администраторам. Web App URL обязан использовать HTTPS. `send_webapp()` не завершает решение: backend проверяет подписанные Telegram Web App init data, а затем вызывает `answerChatJoinRequestQuery`. Auto-approve без проверки пользовательских данных небезопасен.
 
-Убедись, что bot/user capability `supports_join_request_queries`, `ChatFullInfo.guard_bot`, admin setup и получение update этого типа соответствуют окружению. Для классического запроса без `query_id` сохрани прежнее поведение.
+Flow зависит от bot/user capability `supports_join_request_queries`, поля `ChatFullInfo.guard_bot`, admin setup и получения соответствующего update. Классический запрос без `query_id` сохраняет прежнее поведение.
 
 ## Конфигурация
 
-Интегрируй настройки в существующую config-систему. Если аналога нет, добавь типизированные значения:
+Для новых функций используются следующие типизированные настройки:
 
 | Переменная | Default | Проверка |
 |---|---:|---|
@@ -713,26 +713,11 @@ async def handle_join_request(request: ChatJoinRequest, settings: Settings) -> N
 | `JOIN_REQUEST_MODE` | `queue` | `queue`, `approve`, `decline`, `webapp` |
 | `JOIN_REQUEST_WEB_APP_URL` | пусто | обязательный HTTPS URL для `webapp` |
 
-Не дублируй `BOT_TOKEN`, logging и webhook/polling flags, если они уже существуют. Не коммить реальный токен. Не добавляй dotenv-зависимость, если проект получает secrets другим способом.
+`BOT_TOKEN`, logging и webhook/polling flags остаются частью общей конфигурации приложения. Реальный токен не хранится в репозитории. Способ загрузки secrets определяется окружением и не требует обязательного использования dotenv.
 
-## Порядок реализации
+## Проверки совместимости
 
-1. Исследуй проект и зафиксируй выбранную версию/стратегию.
-2. Обнови dependency manifest и lock-файл, не ломая поддерживаемый Python runtime.
-3. Добавь чистые builders Rich HTML/Markdown и unit tests для них.
-4. Интегрируй `send_rich_message` и rich edit в существующие product handlers.
-5. Добавь streaming service и private-chat guard.
-6. Добавь входящий `F.rich_message`, проверив порядок router/handler.
-7. Добавь inline, poll-link и join-request функции только в согласованном продуктовом месте; если переносится весь showcase — перенеси все три.
-8. Обнови команды/меню/README/env example/deployment config только там, где это требуется фактической реализацией.
-9. Добавь тесты сериализации новых aiogram types и methods.
-10. Запусти formatter, linter, type checker, unit/integration tests и build, предусмотренные репозиторием.
-
-## Обязательные тесты
-
-Используй тестовый стек проекта и моки — unit tests не должны обращаться к реальному Telegram API.
-
-Проверь как минимум:
+Unit tests используют моки и не обращаются к реальному Telegram API. Полезный набор проверяемых свойств:
 
 - закреплена разрешённая версия aiogram, а `3.29.0` отсутствует;
 - builder экранирует `<`, `>`, `&` и кавычки в динамическом HTML;
@@ -750,7 +735,7 @@ async def handle_join_request(request: ChatJoinRequest, settings: Settings) -> N
 - `InputPollOption.media` сериализуется как `{"type": "link", "url": "https://..."}`;
 - join request без `query_id` не затрагивается;
 - `approve`, `decline`, `queue` вызывают query answer, а `webapp` требует HTTPS URL;
-- существующие тесты старого бота по-прежнему проходят.
+- существующая функциональность бота не получает регрессий.
 
 Пример protocol-level smoke test для aiogram:
 
@@ -768,9 +753,9 @@ edit = EditMessageText(chat_id=42, message_id=9, rich_message=rich)
 assert edit.text is None
 ```
 
-## Ручная приёмка
+## Ручная проверка
 
-Если доступен тестовый bot token, не используй production token и не удаляй накопленные updates без явной причины. Проверь:
+Для ручной проверки подходит отдельный тестовый bot token. Production token и накопленные production updates для этого не требуются. Сценарий:
 
 1. rich-документ отображает заголовок, таблицу, details, ссылку и формулу;
 2. Rich Markdown не выглядит как сырой MarkdownV2;
@@ -782,31 +767,4 @@ assert edit.text is None
 8. вариант опроса показывает HTTP link на поддерживаемом клиенте;
 9. query-enabled join request обрабатывается выбранной безопасной политикой.
 
-Учитывай, что старый Telegram-клиент может не отрисовать новый UI, даже когда payload и серверный вызов корректны. Отделяй ошибку клиента от ошибки Bot API с помощью protocol tests и логов.
-
-## Критерии готовности
-
-Работа завершена, когда:
-
-- выбранная версия и причина выбора явно описаны;
-- dependency/lock/deployment согласованы между собой;
-- новые функции встроены в архитектуру старого бота без регрессий;
-- динамический HTML экранируется, URL и Web App настройки валидируются;
-- streaming всегда пытается сохранить финальный ответ и не создаёт несколько draft из-за смены id;
-- join-request flow не включает небезопасный auto-approve по умолчанию;
-- все релевантные автоматические проверки проходят;
-- README содержит команды запуска, переменные окружения, ограничения клиентов и короткий smoke-test сценарий;
-- нет токенов, временных файлов, debug dumps и случайных изменений.
-
-## Формат итогового отчёта
-
-В конце сообщи владельцу:
-
-1. какую версию Python, Telegram Bot API и фреймворка выбрал и почему;
-2. какие файлы и функции изменил;
-3. какие возможности реально интегрированы, а какие сознательно не добавлены и почему;
-4. результаты formatter/linter/type checker/tests/build;
-5. что требует внешней настройки в `@BotFather`, правах чата, guard bot, Web App или Telegram client;
-6. оставшиеся риски и конкретный ручной сценарий проверки.
-
-Не объявляй работу готовой, если ты только написал план, не обновил lock-файл, не запускал доступные проверки или скрыл их ошибки.
+Старый Telegram-клиент может не отрисовать новый UI, даже когда payload и серверный вызов корректны. Protocol tests и логи позволяют отличить ограничение клиента от ошибки Bot API.
