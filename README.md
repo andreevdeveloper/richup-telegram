@@ -10,7 +10,7 @@
 |---|---|---|---|
 | Rich HTML: headings, lists, tables, details, quotes, anchors, formulas | `/rich` | [`content.py`](src/richup_bot/content.py), [`rich.py`](src/richup_bot/routers/rich.py) | Клиент Telegram должен поддерживать Rich Messages |
 | GFM-совместимый Rich Markdown | `/markdown` | `InputRichMessage(markdown=...)` | Это не `MarkdownV2`; синтаксис и лимиты отличаются |
-| AI-style streaming | `/stream` | `sendRichMessageDraft` с одним `draft_id`, затем `sendRichMessage` | Только private chat; draft живёт около 30 секунд |
+| AI-style streaming | `/stream` или кнопка `Streaming Draft` | `sendRichMessageDraft` с одним `draft_id`, затем `sendRichMessage` | Обычный личный диалог с ботом; topics не нужны; draft живёт около 30 секунд |
 | Редактирование документа | `/edit` | `editMessageText(rich_message=...)` | Новый файл напрямую при inline-edit загрузить нельзя |
 | Входящий typed AST | `/inspect`, затем переслать rich message | `F.rich_message`, `RichMessage.blocks`, `model_dump()` | Доставка forwarded messages зависит от настроек Telegram |
 | Rich inline result | `@bot_username` в любом чате | `InputRichMessageContent` | Сначала включить inline mode через `/setinline` у `@BotFather` |
@@ -85,10 +85,10 @@ Compose автоматически читает локальный `.env`, ес�
 
 ## Сценарий проверки за несколько минут
 
-1. Отправь `/start` и открой `Rich HTML`: проверь таблицу, раскрывающийся блок, формулу, anchor-link и time entity.
+1. Отправь `/start` и последовательно открой русские разделы меню: каждый раздел заменяет содержимое того же сообщения через `editMessageText(rich_message=...)`.
 2. Открой `Rich Markdown`: сравни GFM table, task list, footnote и block formula с обычным MarkdownV2.
-3. В private chat нажми `AI draft stream`: три состояния должны анимированно заменить друг друга, после чего появится постоянное итоговое сообщение.
-4. Нажми `Edit rich message` и переключай revision: `message_id` остаётся тем же.
+3. В обычном личном диалоге нажми `Streaming Draft`, затем `Запустить стриминг`. Topics и `message_thread_id` не требуются: три состояния черновика должны сменить друг друга, после чего появится постоянное итоговое сообщение.
+4. Нажми `Редактирование` и переключай ревизии: `message_id` остаётся тем же.
 5. Запусти `/poll_links`: у вариантов опроса должны появиться HTTP links.
 6. Включи inline mode через `@BotFather`, затем выбери результат `@bot_username` в другом чате.
 7. Перешли rich message боту: handler покажет JSON-представление типизированного дерева `RichMessage.blocks`.
@@ -199,7 +199,8 @@ uv run pytest -v --cov=src --cov-report=term-missing
 |---|---|---|
 | `method not found` | Установлен `aiogram < 3.29` или старый local Bot API server | `uv run python -c "import aiogram; print(aiogram.__version__)"` |
 | Rich content выглядит обычным текстом | Старый Telegram client | Обновить desktop/mobile client и повторить `/rich` |
-| `/stream` отклонён | Команда отправлена не в private chat | Открыть личный диалог с ботом |
+| `/stream` отклонён даже в личном диалоге | Запущен старый контейнер с проверкой типа чата через identity | Выполнить `docker compose build --no-cache`, затем `docker compose up -d --force-recreate` |
+| `/stream` отклонён в группе | `sendRichMessageDraft` принимает только private chat | Открыть обычный личный диалог с ботом; topics не нужны |
 | Inline result не появляется | Inline mode не включён | Выполнить `/setinline` у `@BotFather` |
 | Join request handler молчит | У request нет `query_id` или бот не guard bot | Включить query-enabled flow и проверить admin setup |
 | Poll option без ссылки | Клиент не поддерживает Bot API 10.1 UI | Обновить клиент; payload проверить тестом `test_protocol_models.py` |

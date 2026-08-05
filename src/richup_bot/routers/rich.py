@@ -28,8 +28,8 @@ from richup_bot.content import (
     build_formatting_showcase,
     build_links_showcase,
     build_lists_showcase,
-    build_menu_document,
     build_markdown_showcase,
+    build_menu_document,
     build_stream_info,
     build_stream_result,
     build_structure_showcase,
@@ -67,7 +67,7 @@ async def handle_rich_markdown(message: Message, bot: Bot) -> None:
 @router.message(Command("stream"))
 async def handle_stream(message: Message, bot: Bot, settings: Settings) -> None:
     """Run a deterministic AI-style rich draft stream."""
-    if message.chat.type is not ChatType.PRIVATE:
+    if message.chat.type != ChatType.PRIVATE:
         await message.answer("Streaming Draft работает только в обычном личном чате с ботом.")
         return
     await _stream(bot, message, settings)
@@ -109,7 +109,7 @@ async def handle_demo_callback(
 
     message = callback.message
     action = callback_data.action
-    if action is DemoAction.STREAM_RUN and message.chat.type is not ChatType.PRIVATE:
+    if action is DemoAction.STREAM_RUN and message.chat.type != ChatType.PRIVATE:
         await callback.answer(
             "Streaming Draft работает только в личном чате с ботом.",
             show_alert=True,

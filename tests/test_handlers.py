@@ -41,13 +41,14 @@ def make_bot() -> Bot:
 @pytest.mark.asyncio
 async def test_common_handlers_answer_with_navigation() -> None:
     message = make_message()
+    bot = make_bot()
 
-    await common.handle_start(message)
+    await common.handle_start(message, bot)
     await common.handle_help(message)
-    await common.handle_menu(message)
+    await common.handle_menu(message, bot)
 
-    assert message.answer.await_count == 3
-    assert all(call.kwargs.get("reply_markup") for call in message.answer.await_args_list)
+    assert bot.send_rich_message.await_count == 2
+    message.answer.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -79,7 +80,25 @@ async def test_stream_command_rejects_non_private_chat() -> None:
         Settings(bot_token="123:token"),
     )
 
-    message.answer.assert_awaited_once_with("Rich drafts are available only in private chats.")
+    message.answer.assert_awaited_once_with(
+        "Streaming Draft работает только в обычном личном чате с ботом."
+    )
+
+
+@pytest.mark.asyncio
+async def test_stream_accepts_raw_private_chat_type_from_update() -> None:
+    message = make_message()
+    message.chat.type = "private"
+    bot = make_bot()
+
+    await rich.handle_stream(
+        message,
+        bot,
+        Settings(bot_token="123:token", stream_delay_seconds=0),
+    )
+
+    bot.send_rich_message_draft.assert_awaited()
+    bot.send_rich_message.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -88,12 +107,12 @@ async def test_demo_callback_rejects_missing_message() -> None:
 
     await rich.handle_demo_callback(
         callback,
-        DemoCallback(action=DemoAction.RICH_HTML),
+        DemoCallback(action=DemoAction.FORMATTING),
         make_bot(),
         Settings(bot_token="123:token"),
     )
 
-    callback.answer.assert_awaited_once_with("The source message is unavailable.", show_alert=True)
+    callback.answer.assert_awaited_once_with("Исходное сообщение недоступно.", show_alert=True)
 
 
 @pytest.mark.asyncio
@@ -103,12 +122,12 @@ async def test_demo_callback_rejects_inaccessible_message() -> None:
 
     await rich.handle_demo_callback(
         callback,
-        DemoCallback(action=DemoAction.RICH_HTML),
+        DemoCallback(action=DemoAction.FORMATTING),
         make_bot(),
         Settings(bot_token="123:token"),
     )
 
-    callback.answer.assert_awaited_once_with("The source message is unavailable.", show_alert=True)
+    callback.answer.assert_awaited_once_with("Исходное сообщение недоступно.", show_alert=True)
 
 
 @pytest.mark.asyncio
@@ -117,13 +136,13 @@ async def test_demo_callback_rejects_group_stream() -> None:
 
     await rich.handle_demo_callback(
         callback,
-        DemoCallback(action=DemoAction.STREAM),
+        DemoCallback(action=DemoAction.STREAM_RUN),
         make_bot(),
         Settings(bot_token="123:token"),
     )
 
     callback.answer.assert_awaited_once_with(
-        "Draft streaming works only in a private chat.", show_alert=True
+        "Streaming Draft работает только в личном чате с ботом.", show_alert=True
     )
 
 
@@ -141,7 +160,20 @@ async def test_demo_callback_dispatches_each_action(action: DemoAction) -> None:
     )
 
     callback.answer.assert_awaited_once_with()
-    if action is DemoAction.POLL_LINKS:
+    edit_actions = {
+        DemoAction.MENU,
+        DemoAction.FORMATTING,
+        DemoAction.LINKS,
+        DemoAction.STRUCTURE,
+        DemoAction.LISTS,
+        DemoAction.TABLE,
+        DemoAction.DETAILS,
+        DemoAction.RICH_MARKDOWN,
+        DemoAction.STREAM_INFO,
+    }
+    if action in edit_actions:
+        bot.edit_message_text.assert_awaited_once()
+    elif action is DemoAction.POLL_LINKS:
         bot.send_poll.assert_awaited_once()
     elif action is DemoAction.INSPECT_HELP:
         bot.send_message.assert_awaited_once()
@@ -153,7 +185,7 @@ async def test_demo_callback_dispatches_each_action(action: DemoAction) -> None:
 async def test_edit_callback_handles_missing_and_available_message() -> None:
     missing = make_callback(None)
     await rich.handle_edit_callback(missing, make_bot())
-    missing.answer.assert_awaited_once_with("The source message is unavailable.", show_alert=True)
+    missing.answer.assert_awaited_once_with("Исходное сообщение недоступно.", show_alert=True)
 
     callback = make_callback(make_message())
     callback.data = "edit:2"
@@ -162,7 +194,7 @@ async def test_edit_callback_handles_missing_and_available_message() -> None:
 
     bot.edit_message_text.assert_awaited_once()
     assert bot.edit_message_text.await_args.kwargs["message_id"] == 9
-    callback.answer.assert_awaited_once_with("Revision 2")
+    callback.answer.assert_awaited_once_with("Ревизия 2")
 
 
 @pytest.mark.asyncio
@@ -179,7 +211,7 @@ async def test_incoming_rich_message_serializes_and_truncates_ast() -> None:
 
     response = message.answer.await_args.args[0]
     assert len(response) < 3900
-    assert response.endswith("... truncated")
+    assert response.endswith("... обрезано")
 
 
 @pytest.mark.asyncio

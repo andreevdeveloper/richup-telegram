@@ -1,21 +1,56 @@
 import pytest
 
 from richup_bot.content import (
+    build_details_showcase,
     build_draft_frames,
     build_edit_revision,
-    build_html_showcase,
+    build_formatting_showcase,
     build_inline_result,
+    build_links_showcase,
+    build_lists_showcase,
     build_markdown_showcase,
+    build_menu_document,
+    build_stream_info,
     build_stream_result,
+    build_structure_showcase,
+    build_table_showcase,
 )
 
 
-def test_html_showcase_escapes_dynamic_user_content() -> None:
-    rich_message = build_html_showcase(first_name='<Admin & "Owner">', user_id=42)
+def test_menu_escapes_dynamic_user_content() -> None:
+    rich_message = build_menu_document(first_name='<Админ & "Владелец">')
 
     assert rich_message.html is not None
-    assert "&lt;Admin &amp; &quot;Owner&quot;&gt;" in rich_message.html
+    assert "&lt;Админ &amp; &quot;Владелец&quot;&gt;" in rich_message.html
+    assert "Добро пожаловать" in rich_message.html
+    assert "editMessageText" in rich_message.html
+    assert rich_message.markdown is None
+
+
+def test_links_showcase_contains_user_link() -> None:
+    rich_message = build_links_showcase(user_id=42)
+
+    assert rich_message.html is not None
     assert "tg://user?id=42" in rich_message.html
+    assert "skip_entity_detection=True" in rich_message.html
+
+
+@pytest.mark.parametrize(
+    ("builder", "marker"),
+    [
+        (build_formatting_showcase, "<tg-spoiler>"),
+        (build_structure_showcase, "<blockquote>"),
+        (build_lists_showcase, "<ol>"),
+        (build_table_showcase, "<table"),
+        (build_details_showcase, "<details"),
+        (build_stream_info, "обычном личном чате"),
+    ],
+)
+def test_html_showcases_contain_expected_block(builder: object, marker: str) -> None:
+    rich_message = builder()  # type: ignore[operator]
+
+    assert rich_message.html is not None
+    assert marker in rich_message.html
     assert rich_message.markdown is None
 
 
@@ -23,7 +58,7 @@ def test_markdown_showcase_uses_markdown_exclusively() -> None:
     rich_message = build_markdown_showcase()
 
     assert rich_message.markdown is not None
-    assert "| Capability |" in rich_message.markdown
+    assert "| Возможность |" in rich_message.markdown
     assert rich_message.html is None
 
 

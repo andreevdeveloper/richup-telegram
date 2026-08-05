@@ -1,17 +1,31 @@
 from richup_bot.callbacks import DemoAction, DemoCallback
-from richup_bot.keyboards import build_demo_menu, build_edit_keyboard
+from richup_bot.keyboards import (
+    build_back_keyboard,
+    build_demo_menu,
+    build_edit_keyboard,
+    build_stream_keyboard,
+)
 
 
-def test_demo_menu_exposes_every_typed_action() -> None:
-    keyboard = build_demo_menu()
-    packed_actions = {
+def _actions(keyboard: object) -> set[DemoAction]:
+    return {
         DemoCallback.unpack(button.callback_data).action
-        for row in keyboard.inline_keyboard
+        for row in keyboard.inline_keyboard  # type: ignore[attr-defined]
         for button in row
         if button.callback_data is not None
     }
 
-    assert packed_actions == set(DemoAction)
+
+def test_demo_menu_exposes_primary_actions() -> None:
+    assert _actions(build_demo_menu()) == set(DemoAction) - {
+        DemoAction.MENU,
+        DemoAction.STREAM_RUN,
+    }
+
+
+def test_secondary_keyboards_expose_navigation_actions() -> None:
+    assert _actions(build_back_keyboard()) == {DemoAction.MENU}
+    assert _actions(build_stream_keyboard()) == {DemoAction.MENU, DemoAction.STREAM_RUN}
 
 
 def test_edit_keyboard_toggles_revision() -> None:
